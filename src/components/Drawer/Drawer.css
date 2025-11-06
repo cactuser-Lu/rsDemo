@@ -1,0 +1,42 @@
+.drawer {
+    margin-left: 20px;
+    font-family: Arial, sans-serif;
+  }
+  
+  .drawer-header {
+    padding: 10px;
+    cursor: pointer;
+    background-color: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .drawer-header.active {
+    background-color: #e0e0e0;
+  }
+  
+  .drawer-content {
+    padding-left: 20px;
+  }
+  
+  .arrow {
+    font-size: 12px;
+  }
+  
+  .highlight .drawer-header {
+    background-color: #fff3cd;
+    border-color: #ffeb3b;
+  }
+
+  .noHighlight .drawer-header {
+    background-color: #fff;
+    border-color: #ffeb3b;
+  }
+  
+  .drawer-tree {
+    padding: 20px;
+  }
+  

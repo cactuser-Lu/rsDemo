@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Worker Example</title>
+</head>
+<body>
+    <h1>Web Worker 示例</h1>
+    <div>
+        <label for="num1">数字 1:</label>
+        <input type="number" id="num1" value="5">
+    </div>
+    <div>
+        <label for="num2">数字 2:</label>
+        <input type="number" id="num2" value="3">
+    </div>
+    <button onclick="calculateSum()">计算和</button>
+    <p>结果: <span id="result">等待计算...</span></p>
+
+    <script>
+        // 主线程代码
+        function calculateSum() {
+            const num1 = parseInt(document.getElementById('num1').value);
+            const num2 = parseInt(document.getElementById('num2').value);
+            document.getElementById('result').textContent = '计算中...';
+
+            // 创建 Worker 实例
+            const worker = new Worker('worker.js');
+
+            // 向 Worker 发送消息
+            worker.postMessage({ a: num1, b: num2 });
+
+            // 接收 Worker 返回的消息
+            worker.onmessage = function(e) {
+                document.getElementById('result').textContent = e.data;
+                // 任务完成后终止 Worker
+                worker.terminate();
+            };
+
+            // 处理 Worker 错误
+            worker.onerror = function(error) {
+                document.getElementById('result').textContent = `错误: ${error.message}`;
+            };
+        }
+    </script>
+</body>
+</html>    

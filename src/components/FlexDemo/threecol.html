@@ -1,0 +1,49 @@
+<style>
+  .container {
+    display: flex;
+    /* justify-content: center;
+    align-items: center; */
+    height: 200px; 
+  }
+  .left {
+    width: 200px;
+    background: #f0f0f0;
+  }
+  .right{
+    width: 200px;
+    background: #f0f0f0;
+  }
+  .middle {
+    flex: 1;
+    /* margin: 0 200px; */
+    background: #eee;
+  }
+  .loading-img{
+    width: 101px;
+    height: 33px;
+    animation: rotate 1s linear infinite;
+  }
+
+  @keyframes rotate {
+    0% {
+        transform: rotate(0deg);
+    }
+    50% {
+        transform: rotate(180deg) scale(5);
+    }
+
+    100% {
+        transform: rotate(360deg) scale(1);
+    }
+  }
+
+</style>
+
+<div class="container">
+  <div class="left">左列（固定200px）</div>
+  <div class="middle">
+    <img src="./result.png" class="loading-img" alt="加载中">
+  </div>
+  <div class="right">右列（固定200px）</div>
+  
+</div>
