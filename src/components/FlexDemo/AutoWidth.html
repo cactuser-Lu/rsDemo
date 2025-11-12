@@ -1,0 +1,32 @@
+<!-- 手撕：设计一个输入内容的区域，然后这个区域的高度会随着内容的增加自适应高度 -->
+<!-- 
+scrollHeight 的定义：元素内容的「总高度」（包括不可见的滚动部分），
+计算规则是「内容高度 + padding」，不包含 border、margin 和滚动条。
+它会实时跟随内容变化（内容增多则增大，内容减少则减小）。
+
+textarea 的高度默认行为：如果不显式设置 height，
+它会以 line-height 和 rows 为基础展示初始高度；
+一旦显式设置 height（比如 style.height = "100px"），
+浏览器会「锁定」这个高度，即使内容减少，也不会自动缩小（除非手动修改 height） 
+-->
+<textarea id="auto" style="overflow:hidden;resize:none;min-height:40px"></textarea>
+
+
+<script>
+    const ta=document.getElementById('auto')
+    const autoSize=(el)=>{
+        
+        el.style.height='auto'
+        el.style.height=el.scrollHeight+'px'
+    }
+    ta.addEventListener('input',()=>autoSize(ta))
+
+</script>
+
+ <style>
+
+ </style>
+
+ <!-- 浏览器对 <textarea> 的「高度渲染优先级规则」+ 布局优化策略——scrollHeight 是「内容所需的真实高度」
+    但直接赋值给 height 时，
+会被浏览器的「显式高度锁定」和「布局惰性优化」覆盖，导致视觉上维持之前的高度。 -->
