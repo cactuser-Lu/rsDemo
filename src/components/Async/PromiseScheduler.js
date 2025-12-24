@@ -92,6 +92,7 @@ var x = 10;//全局作用域
 function foo() {  //两个完全独立的变量
   console.log(x()); 
   function x (){return 123};
+  let x = 20
 }
 foo();
 
