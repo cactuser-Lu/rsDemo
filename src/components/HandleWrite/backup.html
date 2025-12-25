@@ -1,0 +1,107 @@
+<head>
+  <meta charset="UTF-8" />
+  <title>极简自定义Select</title>
+  <style>
+    .custom-select {
+      position: relative;
+      width: 200px;
+      font-size: 14px;
+    }
+    .select-trigger {
+      height: 36px;
+      padding: 0 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #fff;
+    }
+    .select-list {
+      position: absolute;
+      top: 38px;
+      left: 0;
+      right: 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: #fff;
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: none;
+      z-index: 99;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    .select-list.show {
+      display: block;
+    }
+    .select-list li {
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    .select-list li:hover {
+      background: #f5f5f5;
+    }
+    .select-list li.active {
+      color: #409eff;
+      background: #ecf5ff;
+      font-weight: 500;
+    }
+  </style>
+</head>
+
+<!-- 挂载容器 -->
+<div id="mySelect"></div>
+
+<script>
+  const initSelect = (el, data, defaultValue) => {
+    const container = document.querySelector(el);
+    container.innerHTML = `
+        <div class="custom-select">
+            <div class="select-trigger"><span>请选择</span></div>
+            <ul class="select-list">
+                ${data
+                  .map((i) => `<li data-value="${i.value}">${i.label}</li>`)
+                  .join("")}
+            </ul>
+        </div>
+        `;
+    // 缓存元素
+    const trigger = container.querySelector(".select-trigger");
+    const list = container.querySelector(".select-list");
+    const text = trigger.querySelector("span");
+
+    let value = defaultValue;
+    if (value) {
+      const item=data.find(i=>i.value==value)
+      text.textContent=item.label
+      const li=list.querySelector(`[data-value="${value}"]`)
+      li.classList.add('active')
+    }
+
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation()
+        list.classList.toggle('show')
+    });
+
+    list.addEventListener('click', (e) => {
+        const li=e.target
+        console.log(li.dataset)
+        value=li.dataset.value
+        text.textContent=li.textContent;
+        [...list.children].forEach(i=>i.classList.remove('active'))
+        li.classList.add('active')
+        list.classList.remove('show')
+    });
+    document.onclick = () => list.classList.remove('show');
+  };
+  initSelect(
+    "#mySelect",
+    [
+      { label: "选项1", value: "1" },
+      { label: "选项2", value: "2" },
+    ],
+    "1"
+  );
+</script>

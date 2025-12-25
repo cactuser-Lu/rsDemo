@@ -8,6 +8,8 @@ function debounce(fn,delay){
         },delay)
     }
 }
+//无则重设
+//清除重设
 function throttle(fun,delay){
     let timer=null;
     return function(...args){
@@ -19,7 +21,7 @@ function throttle(fun,delay){
         }
     }
 }
-
+//防抖节流  一次操作 脱离文档流 虚拟列表
 // debounce(console.log,1000)('hello')
 
 function deepClone(obj,hash=new WeakMap()){

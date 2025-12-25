@@ -5,6 +5,7 @@ import Home from '../pages/Home';
 import DebounceTest from '../pages/DebounceTest';
 import DrawerPage from '../pages/Drawer';
 import ActivateDemo from '../components/ActivateDemo';
+import TsDemo from '../components/TsDemo';
 
 const router = createBrowserRouter([
   {
@@ -30,6 +31,10 @@ const router = createBrowserRouter([
       {
         path: 'activate',
         element: <ActivateDemo />
+      },
+      {
+        path: 'ts-demo',
+        element: <TsDemo />
       }
     ]
   }
