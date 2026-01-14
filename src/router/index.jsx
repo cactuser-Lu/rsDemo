@@ -6,6 +6,7 @@ import DebounceTest from '../pages/DebounceTest';
 import DrawerPage from '../pages/Drawer';
 import ActivateDemo from '../components/ActivateDemo';
 import TsDemo from '../components/TsDemo';
+import UploadFile from '../components/UploadFile';
 
 const router = createBrowserRouter([
   {
@@ -35,6 +36,10 @@ const router = createBrowserRouter([
       {
         path: 'ts-demo',
         element: <TsDemo />
+      },
+      {
+        path: 'UploadFile',
+        element: <UploadFile />
       }
     ]
   }

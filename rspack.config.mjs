@@ -68,6 +68,13 @@ export default defineConfig({
 		css: true
 	},
 	devServer: {
-		historyApiFallback: true
+		historyApiFallback: true,
+		proxy: [
+			{
+				context: ['/api', '/uploads'],
+				target: 'http://localhost:3001',
+				changeOrigin: true
+			}
+		]
 	}
 });
