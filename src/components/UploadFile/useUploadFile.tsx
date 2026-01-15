@@ -40,6 +40,12 @@ interface UseUploadFileParams {
 const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
   // 引用存储
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  const fileStateRef = useRef<Map<string, {
+    fileMd5: string;
+    totalChunks: number;
+    uploadedChunks: Set<number>;
+    status: UploadStatus;
+  }>>(new Map());
 
   // 生成文件MD5（唯一标识，用于断点续传）
   const memoizedGenerateFileMd5 = useCallback(
@@ -67,15 +73,19 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
     async (fileMd5: string, fileName: string) => {
       // 先读前端缓存
       const localInfo = storage.getChunkInfo(fileMd5) as any;
-      if (localInfo?.uploadedChunks) {
+      if (localInfo?.uploadedChunks && Array.isArray(localInfo.uploadedChunks)) {
+        console.log(`从localStorage读取到已上传分片: ${localInfo.uploadedChunks.length}/${localInfo.totalChunks}`);
         return localInfo.uploadedChunks as number[];
       }
       // 前端无缓存，请求后端校验
       try {
         const res = await axios.post(CONFIG.VERIFY_URL, { fileMd5, fileName });
-        return res.data.uploadedChunks || [];
+        const uploadedChunks = res.data.data?.uploadedChunks || [];
+        console.log(`从后端读取到已上传分片: ${uploadedChunks.length}`);
+        return uploadedChunks;
       } catch (e) {
-        throw new Error("校验分片失败，请重试");
+        console.error("校验分片失败", e);
+        return [];
       }
     },
     []
@@ -118,37 +128,19 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
           headers: { "Content-Type": "multipart/form-data" },
         });
 
-        // 获取当前文件项并更新已上传分片
-        // const currentItem = uploadList.get(fileId);
-        // if (currentItem) {
-        //   const newUploadedChunks = [...(currentItem.uploadedChunks || []), chunkIndex];
-        //   const newProgress = Math.round((newUploadedChunks.length / totalChunks) * 100);
-        //   updateFileItem(fileId, {
-        //     uploadedChunks: newUploadedChunks,
-        //     progress: newProgress,
-        //   });
-        // }
-
-        // setUploadList((prev) => {
-        //   const newMap = new Map(prev);
-        //   const cur = newMap.get(fileId);
-        //   if (cur) {
-        //     const newUploadedChunks = [...(cur.uploadedChunks || []), chunkIndex];
-        //     const newProgress = Math.round((newUploadedChunks.length / totalChunks) * 100);
-        //     newMap.set(fileId, { ...cur, uploadedChunks: newUploadedChunks, progress: newProgress });
-        //   }
-        //   return newMap;
-        // });
-
-        // 更新本地存储
-        storage.saveChunkInfo({
-          fileMd5,
-          chunkIndex,
-          chunkSize: CONFIG.CHUNK_SIZE,
-          totalChunks,
-          fileSize: 0,
-          fileName,
-          lastUpdateTime: Date.now(),
+        // 使用函数式更新避免闭包问题，同时更新本地存储
+        setUploadList((prev) => {
+          const newMap = new Map(prev);
+          const cur = newMap.get(fileId);
+          if (cur) {
+            const newUploadedChunks = [...(cur.uploadedChunks || []), chunkIndex];
+            const newProgress = Math.round((newUploadedChunks.length / totalChunks) * 100);
+            newMap.set(fileId, { ...cur, uploadedChunks: newUploadedChunks, progress: newProgress });
+            
+            // 在状态更新回调内保存到localStorage，确保数据一致
+            storage.saveChunkInfo(fileMd5, newUploadedChunks, totalChunks, fileName);
+          }
+          return newMap;
         });
       } catch (e) {
         if ((e as Error).message !== "canceled") {
@@ -156,7 +148,7 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
         }
       }
     },
-    [updateFileItem, storage, uploadList]
+    [updateFileItem, storage]
   );
 
   // 核心上传逻辑（分片+断点续传）
@@ -177,6 +169,24 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
 
         // 校验已上传分片（断点续传核心）
         const uploadedChunks = await verifyUploadedChunks(fileMd5, file.name);
+        
+        // 如果已上传的分片数等于总数，说明所有分片都已完成，直接合并
+        if (uploadedChunks.length === totalChunks && uploadedChunks.length > 0) {
+          await axios.post(CONFIG.MERGE_URL, {
+            fileMd5,
+            fileName: file.name,
+            totalChunks,
+          });
+          updateFileItem(fileId, {
+            status: "completed",
+            progress: 100,
+            endTime: Date.now(),
+          });
+          storage.clearChunkInfo(fileMd5);
+          return;
+        }
+
+        // 更新已上传分片信息
         updateFileItem(fileId, { uploadedChunks, totalChunks });
 
         // 过滤已上传分片，仅上传未完成的
@@ -184,7 +194,7 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
           .map((chunk: Blob, index: number) => ({ chunk, index }))
           .filter(({ index }: { index: number }) => !uploadedChunks.includes(index));
 
-        // 无未上传分片，直接合并
+        // 无未上传分片（理论上不会走到这里，因为上面已经处理了）
         if (unUploadedChunks.length === 0) {
           await axios.post(CONFIG.MERGE_URL, {
             fileMd5,
@@ -201,9 +211,21 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
         }
 
         // 串行上传分片（避免并发过多导致服务器压力）
+        // 本地计数器，记录本轮成功上传的分片数
+        let successfulUploadsInThisRound = 0;
+        
         for (const { chunk, index } of unUploadedChunks) {
-          const currentItem = uploadList.get(fileId);
-          if (currentItem?.status === "paused") break;
+          // 使用函数式读取避免闭包问题
+          let shouldPause = false;
+          setUploadList((prev) => {
+            const item = prev.get(fileId);
+            if (item?.status === "paused") {
+              shouldPause = true;
+            }
+            return prev;
+          });
+          if (shouldPause) break;
+          
           await uploadSingleChunk(
             fileId,
             chunk,
@@ -212,11 +234,31 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
             totalChunks,
             file.name
           );
+          
+          // 上传成功，计数器+1
+          successfulUploadsInThisRound++;
         }
 
-        // 所有分片上传完成，请求合并
-        const finalItem = uploadList.get(fileId);
-        if (finalItem?.status !== "paused") {
+        // for循环结束后，检查是否被暂停，只有未暂停才进行merge检查
+        let currentStatus = "uploading";
+        setUploadList((prev) => {
+          const item = prev.get(fileId);
+          if (item) {
+            currentStatus = item.status;
+          }
+          return prev;
+        });
+
+        // 如果被暂停，则不执行merge
+        if (currentStatus === "paused") {
+          return;
+        }
+
+        // 计算实际已上传的总数：之前的 + 本轮的
+        const totalUploadedCount = uploadedChunks.length + successfulUploadsInThisRound;
+
+        // 只要所有分片都上传完成，就执行合并
+        if (totalUploadedCount === totalChunks) {
           await axios.post(CONFIG.MERGE_URL, {
             fileMd5,
             fileName: file.name,
