@@ -58,7 +58,7 @@ const FileUploader: React.FC = () => {
         return newMap;
       });
 
-      // 重置 input
+      // 重置 input，解决无法选择同名文件的问题
       e.target.value = "";
     },
     []

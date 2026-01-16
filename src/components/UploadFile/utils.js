@@ -52,12 +52,22 @@ export const splitFileIntoChunks = (file, chunkSize = CONFIG.CHUNK_SIZE) => {
  */
 export const storage = {
   /**
-   * 保存分片信息到本地存储
-   * @param {Object} chunkInfo - 分片信息对象
+   * 保存分片信息到本地存储（累积保存已上传分片数组）
+   * @param {string} fileMd5 - 文件MD5
+   * @param {number[]} uploadedChunks - 已上传的分片索引数组
+   * @param {number} totalChunks - 总分片数
+   * @param {string} fileName - 文件名
    */
-  saveChunkInfo: (chunkInfo) => {
+  saveChunkInfo: (fileMd5, uploadedChunks, totalChunks, fileName) => {
     try {
-      const key = `${CONFIG.STORAGE_KEY_PREFIX}${chunkInfo.fileMd5}`;
+      const key = `${CONFIG.STORAGE_KEY_PREFIX}${fileMd5}`;
+      const chunkInfo = {
+        fileMd5,
+        uploadedChunks,
+        totalChunks,
+        fileName,
+        lastUpdateTime: Date.now()
+      };
       localStorage.setItem(key, JSON.stringify(chunkInfo));
     } catch (e) {
       console.warn("localStorage 存储溢出", e);

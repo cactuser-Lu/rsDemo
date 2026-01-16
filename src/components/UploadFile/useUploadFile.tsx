@@ -7,6 +7,33 @@ import {
   storage,
 } from "./utils";
 
+/**
+ * 文件上传 Hook - 基于业界主流方案的架构设计
+ * 
+ * 核心设计原则：
+ * 1. 状态分层：
+ *    - 内存状态（fileStateRef）：同步，负责业务逻辑（计数、暂停判断、合并触发）
+ *    - React 状态（uploadList）：异步，仅负责 UI 渲染，不参与任何决策
+ *    - LocalStorage：持久化，用于断点续传
+ * 
+ * 2. 数据结构优化：
+ *    - Set<number> 存储已上传分片：自动去重、O(1)查找、原子更新
+ *    - Map 存储文件状态：O(1)访问
+ * 
+ * 3. 校验权威：
+ *    - 已上传分片数以「后端校验结果」为准
+ *    - 前端缓存仅做性能优化
+ * 
+ * 4. 暂停/续传无状态：
+ *    - 续传复用上传逻辑
+ *    - 依靠断点续传自动跳过已传分片
+ *    - 无需维护暂停位置
+ * 
+ * 5. 合并兜底：
+ *    - 后端合并接口强制校验所有分片
+ *    - 避免前端计数错误导致的合并失败
+ */
+
 // 类型定义
 export type UploadStatus = "idle" | "uploading" | "paused" | "completed" | "failed";
 
@@ -38,12 +65,14 @@ interface UseUploadFileParams {
 }
 
 const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
-  // 引用存储
+  // ========== 内存状态层（同步，负责业务逻辑） ==========
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  
+  // 核心业务状态：使用 ref 存储同步状态，避免 React 异步问题
   const fileStateRef = useRef<Map<string, {
     fileMd5: string;
     totalChunks: number;
-    uploadedChunks: Set<number>;
+    uploadedChunks: Set<number>;  // Set 自动去重，O(1) 查找
     status: UploadStatus;
   }>>(new Map());
 
@@ -53,7 +82,60 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
     []
   );
 
-  // 更新单个文件的上传项
+  // ========== 状态同步函数：内存 -> React -> localStorage ==========
+  // 统一的状态更新入口，确保三层状态一致
+  const syncFileState = useCallback(
+    (fileId: string, fileMd5: string, updates: {
+      uploadedChunks?: Set<number>;
+      totalChunks?: number;
+      status?: UploadStatus;
+      progress?: number;
+      error?: string;
+    }) => {
+      // 1. 同步更新内存状态（业务逻辑层）
+      const state = fileStateRef.current.get(fileId);
+      if (state) {
+        if (updates.uploadedChunks) state.uploadedChunks = updates.uploadedChunks;
+        if (updates.totalChunks) state.totalChunks = updates.totalChunks;
+        if (updates.status) state.status = updates.status;
+      }
+
+      // 2. 异步更新 React 状态（UI 渲染层）
+      setUploadList((prev) => {
+        const newMap = new Map(prev);
+        const item = newMap.get(fileId);
+        if (item) {
+          const newItem = { ...item };
+          if (updates.uploadedChunks) {
+            newItem.uploadedChunks = Array.from(updates.uploadedChunks);
+            newItem.progress = Math.round((updates.uploadedChunks.size / (updates.totalChunks || item.totalChunks)) * 100);
+          }
+          if (updates.totalChunks !== undefined) newItem.totalChunks = updates.totalChunks;
+          if (updates.status) newItem.status = updates.status;
+          if (updates.error) newItem.error = updates.error;
+          if (updates.progress !== undefined) newItem.progress = updates.progress;
+          newMap.set(fileId, newItem);
+        }
+        return newMap;
+      });
+
+      // 3. 同步持久化到 localStorage（断点续传层）
+      if (updates.uploadedChunks && state) {
+        const item = uploadList.get(fileId);
+        if (item) {
+          storage.saveChunkInfo(
+            fileMd5,
+            Array.from(updates.uploadedChunks),
+            updates.totalChunks || state.totalChunks,
+            item.file.name
+          );
+        }
+      }
+    },
+    [setUploadList, uploadList]
+  );
+
+  // 更新单个文件的上传项（仅用于状态字段更新）
   const updateFileItem = useCallback(
     (id: string, updates: Partial<FileUploadItem>) => {
       setUploadList((prevMap: Map<string, FileUploadItem>) => {
@@ -64,6 +146,12 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
         }
         return newMap;
       });
+      
+      // 同步更新内存状态的 status
+      if (updates.status) {
+        const state = fileStateRef.current.get(id);
+        if (state) state.status = updates.status;
+      }
     },
     [setUploadList]
   );
@@ -98,7 +186,7 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
     []
   );
 
-  // 上传单个分片
+  // ========== 分片上传函数：返回成功状态 ==========
   const uploadSingleChunk = useCallback(
     async (
       fileId: string,
@@ -107,7 +195,7 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
       fileMd5: string,
       totalChunks: number,
       fileName: string
-    ) => {
+    ): Promise<boolean> => {  // 返回是否成功
       const formData = new FormData();
       formData.append("file", chunk);
       formData.append("fileMd5", fileMd5);
@@ -128,30 +216,30 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
           headers: { "Content-Type": "multipart/form-data" },
         });
 
-        // 使用函数式更新避免闭包问题，同时更新本地存储
-        setUploadList((prev) => {
-          const newMap = new Map(prev);
-          const cur = newMap.get(fileId);
-          if (cur) {
-            const newUploadedChunks = [...(cur.uploadedChunks || []), chunkIndex];
-            const newProgress = Math.round((newUploadedChunks.length / totalChunks) * 100);
-            newMap.set(fileId, { ...cur, uploadedChunks: newUploadedChunks, progress: newProgress });
-            
-            // 在状态更新回调内保存到localStorage，确保数据一致
-            storage.saveChunkInfo(fileMd5, newUploadedChunks, totalChunks, fileName);
-          }
-          return newMap;
-        });
-      } catch (e) {
-        if ((e as Error).message !== "canceled") {
-          throw new Error(`分片 ${chunkIndex + 1} 上传失败`);
+        // 上传成功：同步更新内存状态
+        const state = fileStateRef.current.get(fileId);
+        if (state) {
+          state.uploadedChunks.add(chunkIndex);  // Set 自动去重，同步原子操作
+          
+          // 同步三层状态
+          syncFileState(fileId, fileMd5, {
+            uploadedChunks: state.uploadedChunks,
+            totalChunks
+          });
         }
+
+        return true;  // 上传成功
+      } catch (e) {
+        if ((e as Error).message === "canceled") {
+          return false;  // 被取消，不算失败
+        }
+        throw new Error(`分片 ${chunkIndex + 1} 上传失败`);
       }
     },
-    [updateFileItem, storage]
+    [syncFileState]
   );
 
-  // 核心上传逻辑（分片+断点续传）
+  // ========== 核心上传逻辑：基于内存状态的业务决策 ==========
   const uploadFile = useCallback(
     async (fileId: string) => {
       const fileItem = uploadList.get(fileId);
@@ -167,11 +255,27 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
         // 切割文件
         const { chunks, totalChunks } = memoizedSplitFileIntoChunks(file);
 
-        // 校验已上传分片（断点续传核心）
-        const uploadedChunks = await verifyUploadedChunks(fileMd5, file.name);
+        // 校验已上传分片（以后端为准，前端缓存仅做优化）
+        const uploadedChunksArray = await verifyUploadedChunks(fileMd5, file.name);
+        const uploadedChunksSet = new Set<number>(uploadedChunksArray);
+        
+        // 初始化内存状态（业务逻辑层）
+        fileStateRef.current.set(fileId, {
+          fileMd5,
+          totalChunks,
+          uploadedChunks: uploadedChunksSet,
+          status: "uploading"
+        });
+
+        // 同步到 React 状态（UI 层）
+        updateFileItem(fileId, {
+          uploadedChunks: uploadedChunksArray,
+          totalChunks,
+          progress: Math.round((uploadedChunksSet.size / totalChunks) * 100)
+        });
         
         // 如果已上传的分片数等于总数，说明所有分片都已完成，直接合并
-        if (uploadedChunks.length === totalChunks && uploadedChunks.length > 0) {
+        if (uploadedChunksSet.size === totalChunks && totalChunks > 0) {
           await axios.post(CONFIG.MERGE_URL, {
             fileMd5,
             fileName: file.name,
@@ -183,49 +287,24 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
             endTime: Date.now(),
           });
           storage.clearChunkInfo(fileMd5);
+          fileStateRef.current.delete(fileId);
           return;
         }
-
-        // 更新已上传分片信息
-        updateFileItem(fileId, { uploadedChunks, totalChunks });
 
         // 过滤已上传分片，仅上传未完成的
         const unUploadedChunks = chunks
           .map((chunk: Blob, index: number) => ({ chunk, index }))
-          .filter(({ index }: { index: number }) => !uploadedChunks.includes(index));
-
-        // 无未上传分片（理论上不会走到这里，因为上面已经处理了）
-        if (unUploadedChunks.length === 0) {
-          await axios.post(CONFIG.MERGE_URL, {
-            fileMd5,
-            fileName: file.name,
-            totalChunks,
-          });
-          updateFileItem(fileId, {
-            status: "completed",
-            progress: 100,
-            endTime: Date.now(),
-          });
-          storage.clearChunkInfo(fileMd5);
-          return;
-        }
+          .filter(({ index }) => !uploadedChunksSet.has(index));
 
         // 串行上传分片（避免并发过多导致服务器压力）
-        // 本地计数器，记录本轮成功上传的分片数
-        let successfulUploadsInThisRound = 0;
-        
         for (const { chunk, index } of unUploadedChunks) {
-          // 使用函数式读取避免闭包问题
-          let shouldPause = false;
-          setUploadList((prev) => {
-            const item = prev.get(fileId);
-            if (item?.status === "paused") {
-              shouldPause = true;
-            }
-            return prev;
-          });
-          if (shouldPause) break;
+          // 读取内存状态判断是否暂停（同步读取，无延迟）
+          const state = fileStateRef.current.get(fileId);
+          if (!state || state.status === "paused") {
+            break;
+          }
           
+          // 上传单个分片
           await uploadSingleChunk(
             fileId,
             chunk,
@@ -234,31 +313,22 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
             totalChunks,
             file.name
           );
-          
-          // 上传成功，计数器+1
-          successfulUploadsInThisRound++;
         }
 
-        // for循环结束后，检查是否被暂停，只有未暂停才进行merge检查
-        let currentStatus = "uploading";
-        setUploadList((prev) => {
-          const item = prev.get(fileId);
-          if (item) {
-            currentStatus = item.status;
-          }
-          return prev;
-        });
+        // for循环结束，基于内存状态判断是否 merge（100% 准确）
+        const finalState = fileStateRef.current.get(fileId);
+        if (!finalState) return;
 
         // 如果被暂停，则不执行merge
-        if (currentStatus === "paused") {
+        if (finalState.status === "paused") {
           return;
         }
 
-        // 计算实际已上传的总数：之前的 + 本轮的
-        const totalUploadedCount = uploadedChunks.length + successfulUploadsInThisRound;
+        // 同步读取已上传数量（业界方案：直接从内存状态读取）
+        const actualUploadedCount = finalState.uploadedChunks.size;
 
         // 只要所有分片都上传完成，就执行合并
-        if (totalUploadedCount === totalChunks) {
+        if (actualUploadedCount === totalChunks) {
           await axios.post(CONFIG.MERGE_URL, {
             fileMd5,
             fileName: file.name,
@@ -270,12 +340,14 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
             endTime: Date.now(),
           });
           storage.clearChunkInfo(fileMd5);
+          fileStateRef.current.delete(fileId);  // 清理内存状态
         }
       } catch (e) {
         updateFileItem(fileId, {
           status: "failed",
           error: (e as Error).message,
         });
+        fileStateRef.current.delete(fileId);  // 失败也清理
       }
     },
     [
@@ -288,32 +360,49 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
     ]
   );
 
-  // 暂停单个文件上传
+  // ========== 暂停/继续/取消：无状态设计 ==========
+  // 暂停：仅标记状态，上传循环自动检测退出
   const handlePauseFile = useCallback(
     (fileId: string) => {
+      // 同步更新内存状态
+      const state = fileStateRef.current.get(fileId);
+      if (state) state.status = "paused";
+      
+      // 更新UI状态
       updateFileItem(fileId, { status: "paused" });
+      
+      // 中止当前请求
       abortControllersRef.current.get(fileId)?.abort();
     },
     [updateFileItem]
   );
 
-  // 继续上传单个文件
+  // 继续：直接复用 uploadFile，依靠断点续传自动跳过已传分片
   const handleResumeFile = useCallback(
     (fileId: string) => {
       abortControllersRef.current.delete(fileId);
-      uploadFile(fileId);
+      uploadFile(fileId);  // 复用上传逻辑，无需维护暂停位置
     },
     [uploadFile]
   );
 
-  // 取消单个文件上传
+  // 取消：清理所有状态
   const handleCancelFile = useCallback(
     (fileId: string) => {
       const item = uploadList.get(fileId);
       if (item) {
+        // 中止请求
         abortControllersRef.current.get(fileId)?.abort();
-        storage.clearChunkInfo(fileId);
         abortControllersRef.current.delete(fileId);
+        
+        // 清理内存状态
+        const state = fileStateRef.current.get(fileId);
+        if (state) {
+          storage.clearChunkInfo(state.fileMd5);
+          fileStateRef.current.delete(fileId);
+        }
+        
+        // 清理UI状态
         setUploadList((prev) => {
           const newMap = new Map(prev);
           newMap.delete(fileId);
@@ -321,7 +410,7 @@ const useUploadFile = ({ setUploadList, uploadList }: UseUploadFileParams) => {
         });
       }
     },
-    [uploadList, storage, setUploadList]
+    [uploadList, setUploadList]
   );
 
   return {
