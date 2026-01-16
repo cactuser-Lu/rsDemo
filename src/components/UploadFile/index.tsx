@@ -6,6 +6,7 @@ const FileUploader: React.FC = () => {
   // 状态管理
   const [uploadList, setUploadList] = useState<Map<string, FileUploadItem>>(new Map());
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // 使用 hook 获取上传逻辑
   const { uploadFile, handlePauseFile, handleResumeFile, handleCancelFile } = useUploadFile({
@@ -64,6 +65,66 @@ const FileUploader: React.FC = () => {
     []
   );
 
+  // 添加文件到上传列表（统一处理函数）
+  const addFilesToList = useCallback(
+    (files: FileList | File[]) => {
+      setUploadList((prevMap) => {
+        const newMap = new Map(prevMap);
+        Array.from(files).forEach((file) => {
+          const fileId = `${file.name}-${file.size}-${Date.now()}`;
+          newMap.set(fileId, {
+            id: fileId,
+            file,
+            status: "idle",
+            progress: 0,
+            error: "",
+            uploadedChunks: [],
+            totalChunks: 0,
+          });
+        });
+        return newMap;
+      });
+    },
+    []
+  );
+
+  // 拖拽事件处理
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // 只有当离开整个拖放区域时才取消高亮
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+
+      if (isUploading) return;
+
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        addFilesToList(files);
+      }
+    },
+    [isUploading, addFilesToList]
+  );
+
   // UI 渲染
   return (
     <div style={{ padding: "20px", fontFamily: "Arial, sans-serif" }}>
@@ -71,19 +132,29 @@ const FileUploader: React.FC = () => {
 
       {/* 文件选择区 */}
       <div
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         style={{
-          border: "2px dashed #ccc",
+          border: isDragging ? "2px dashed #1890ff" : "2px dashed #ccc",
           borderRadius: "8px",
           padding: "20px",
           textAlign: "center",
           marginBottom: "20px",
-          backgroundColor: "#f9f9f9",
+          backgroundColor: isDragging ? "#e6f7ff" : "#f9f9f9",
+          transition: "all 0.3s ease",
+          cursor: isUploading ? "not-allowed" : "pointer",
         }}
       >
         <input
           type="file"
           multiple
-          onChange={handleFileChange}
+          onChange={(e) => {
+            const files = e.target.files;
+            if (files) addFilesToList(files);
+            e.target.value = "";
+          }}
           disabled={isUploading}
           style={{ display: "none" }}
           id="fileInput"
@@ -93,10 +164,13 @@ const FileUploader: React.FC = () => {
           style={{
             cursor: isUploading ? "not-allowed" : "pointer",
             opacity: isUploading ? 0.5 : 1,
+            display: "block",
           }}
         >
-          <p>👆 点击选择文件或拖放文件到此处</p>
-          <p style={{ fontSize: "12px", color: "#999" }}>
+          <p style={{ margin: "0 0 8px 0", fontSize: "16px" }}>
+            {isDragging ? "📦 松开鼠标放置文件" : "👆 点击选择文件或拖放文件到此处"}
+          </p>
+          <p style={{ fontSize: "12px", color: "#999", margin: 0 }}>
             已选择 {uploadList.size} 个文件
           </p>
         </label>
