@@ -10,9 +10,10 @@ class MyPromise {
       if (this.status === "pending") {
         this.status = "fulfilled";
         this.value = value;
+        console.log(this.onFulfilledCallback.length,'length')
         this.onFulfilledCallback.forEach((cb) => cb(this.value));
       }
-      console.log(this.onFulfilledCallback, "onFulfilledCallback");
+      // console.log(this.onFulfilledCallback, "onFulfilledCallback");
     };
 
     const reject = (value) => {
@@ -30,7 +31,7 @@ class MyPromise {
       const handleFulfilled = () => {
         setTimeout(() => {
           const res = onFulfilled(this.value);
-          console.log("handleFulfilled", onFulfilled.toString(), res);
+          // console.log("handleFulfilled", onFulfilled.toString(), res);
           this.resolvePromise(res, p, resolve, reject);
         }, 0);
       };
@@ -42,7 +43,7 @@ class MyPromise {
       };
       console.log("then's cb", this.status, onFulfilled, this.value);
       if (this.status === "fulfilled") {
-        console.log("then's cb", onFulfilled);
+        // console.log("then's cb", onFulfilled);
         handleFulfilled();
       } else if (this.status === "reject") {
         handleReject();
@@ -55,7 +56,7 @@ class MyPromise {
   }
 
   resolvePromise(res, p, resolve, reject) {
-    console.log(res, "resolvePromise");
+    // console.log(res, "resolvePromise");
     if(res instanceof MyPromise)res.then((value) => this.resolvePromise(value, p, resolve, reject));
 
     else if(res && res.then && typeof res.then ==='function'){
@@ -96,3 +97,47 @@ new MyPromise((resolve) => {
   .then((num) => {
     console.log("最终：", num); // 再等1秒输出：最终：25
   });
+const myThenable = {
+  then: function (resolve, reject) {
+    setTimeout(() => {
+      resolve("success myThenable");
+      reject("fail myThenable");
+    }, 1000);
+  },
+};
+const p1=new MyPromise((resolve) => {
+  setTimeout(() => resolve(10), 0);
+// resolve(10);
+})
+p1.then(res=>{console.log(1)})
+p1.then(res=>{console.log(2)})
+p1.then(res=>{console.log(3)})
+  /**
+   * 流程
+   * 首先进来执行
+   * (resolve) => {
+        setTimeout(() => resolve(10), 0);
+      // resolve(10);
+      }
+    这个时候resolve还没有执行
+     然后执行then 创建promise p1
+     取到的是cb1  (num) => {
+        console.log("第一步：", num); // 1秒后输出：第一步：10
+        return num * 2; // 返回普通值
+      }
+        将cb1进行包装，传入value并将返回值进行promise判断和resolve
+        用于合适的时候执行
+
+      发现还没有resolve，然后包装的cb1入栈，返回promise p1
+
+      调用promise p1的then后，创建了p2
+
+      对于p2,进来后发现，p2的状态依赖于p1，于是重复
+
+      最终有4个promise p-cb1 p1-cb2 p2-cb3 p3
+
+      然后p的resolve后，执行cb1,cb1的执行，导致p1被resolve，
+
+      连锁反应
+
+   */

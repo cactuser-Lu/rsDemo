@@ -7,6 +7,7 @@ import DrawerPage from '../pages/Drawer';
 import ActivateDemo from '../components/ActivateDemo';
 import TsDemo from '../components/TsDemo';
 import UploadFile from '../components/UploadFile';
+import EffectCompare from '../components/HookDemo/useEffectDemo'
 
 const router = createBrowserRouter([
   {
@@ -40,6 +41,10 @@ const router = createBrowserRouter([
       {
         path: 'UploadFile',
         element: <UploadFile />
+      },
+       {
+        path: 'EffectCompare',
+        element: <EffectCompare />
       }
     ]
   }
