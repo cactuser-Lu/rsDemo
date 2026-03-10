@@ -8,6 +8,8 @@ import ActivateDemo from '../components/ActivateDemo';
 import TsDemo from '../components/TsDemo';
 import UploadFile from '../components/UploadFile';
 import EffectCompare from '../components/HookDemo/useEffectDemo'
+import Chat from '../components/ai/index'
+
 
 const router = createBrowserRouter([
   {
@@ -45,6 +47,10 @@ const router = createBrowserRouter([
        {
         path: 'EffectCompare',
         element: <EffectCompare />
+      },
+      {
+        path: 'Chat',
+        element: <Chat />
       }
     ]
   }
