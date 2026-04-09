@@ -9,6 +9,7 @@ import TsDemo from '../components/TsDemo';
 import UploadFile from '../components/UploadFile';
 import EffectCompare from '../components/HookDemo/useEffectDemo'
 import Chat from '../components/ai/index'
+import Counter from '../components/HookDemo/useStateDemo.tsx'
 
 
 const router = createBrowserRouter([
@@ -51,6 +52,10 @@ const router = createBrowserRouter([
       {
         path: 'Chat',
         element: <Chat />
+      },
+      {
+        path: 'count',
+        element: <Counter />
       }
     ]
   }
