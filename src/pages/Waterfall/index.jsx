@@ -2,70 +2,121 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import "./Waterfall.css";
 
 // ---------- 自定义 Hook 1: 滚动触底检测 ----------
-function useScrollLoader(onLoadMore, hasMore) {
-  const [isLoading, setIsLoading] = useState(false);
-  const loadingRef = useRef(false);
+function useScrollLoader(onLoadMore, hasMore, isLoading, offset = 100) {
+  const onLoadMoreRef = useRef(onLoadMore);
+  const hasMoreRef = useRef(hasMore);
+  const isLoadingRef = useRef(isLoading);
+  const tickingRef = useRef(false);
 
   useEffect(() => {
-    loadingRef.current = isLoading;
+    onLoadMoreRef.current = onLoadMore;
+  }, [onLoadMore]);
+
+  useEffect(() => {
+    hasMoreRef.current = hasMore;
+  }, [hasMore]);
+
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
   }, [isLoading]);
 
   const handleScroll = useCallback(() => {
-    if (!hasMore || loadingRef.current) return;
+    if (tickingRef.current) return;
+    tickingRef.current = true;
 
-    const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
-    const windowHeight = window.innerHeight;
-    const documentHeight = document.documentElement.scrollHeight;
+    window.requestAnimationFrame(() => {
+      tickingRef.current = false;
+      if (!hasMoreRef.current || isLoadingRef.current) return;
 
-    // 距离底部 100px 时触发
-    if (scrollTop + windowHeight + 100 >= documentHeight) {
-      setIsLoading(true);
-      onLoadMore().finally(() => setIsLoading(false));
-    }
-  }, [hasMore, onLoadMore]);
+      const scrollTop =
+        document.documentElement.scrollTop || document.body.scrollTop;
+      const windowHeight = window.innerHeight;
+      const documentHeight = document.documentElement.scrollHeight;
+
+      // 距离底部 offset 时触发
+      if (scrollTop + windowHeight + offset >= documentHeight) {
+        onLoadMoreRef.current();
+      }
+    });
+  }, [offset]);
 
   useEffect(() => {
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    // 初次挂载也检查一次，避免内容过短时无法触发滚动
+    handleScroll();
+    return () => window.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
-
-  return { isLoading };
 }
 
 function useMockData(initialPage = 1, pageSize = 10) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
-  const [page, setPage] = useState(initialPage);
+  const [hasMore, setHasMore] = useState(true);
+  const pageRef = useRef(initialPage - 1);
+  const lockRef = useRef(false);
+  const mountedRef = useRef(true);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    // 生成 mock 数据，不同内容导致卡片高度不一
-    const startId = (pageNum - 1) * pageSize;
-    const newItems = Array.from({ length: pageSize }, (_, i) => ({
-      id: startId + i + 1,
-      title: `卡片 ${startId + i + 1}`,
-      content: getRandomContent(), // 随机内容长度，产生不定高
-    }));
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
-    const total=5
-    setHasMore(pageNum<total)
-    setLoading(false)
+  const fetchPageData = useCallback(
+    async (pageNum) => {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      // 生成 mock 数据，不同内容导致卡片高度不一
+      const startId = (pageNum - 1) * pageSize;
+      const newItems = Array.from({ length: pageSize }, (_, i) => ({
+        id: startId + i + 1,
+        title: `卡片 ${startId + i + 1}`,
+        content: getRandomContent(), // 随机内容长度，产生不定高
+      }));
 
-    return newItems
-  }, [pageSize]);
+      const totalPages = 5;
+      return {
+        newItems,
+        nextHasMore: pageNum < totalPages,
+      };
+    },
+    [pageSize],
+  );
 
-  const loadMore = useCallback(async()=>{
-    if(!hasMore||isLoading)return;
-    const newPage= await fetchData(page+1)
-    setItems(prev=>[...prev,...newPage])
-    setPage(p=>p+1)
-  })
+  const loadPage = useCallback(
+    async (pageNum, mode = "append") => {
+      if (lockRef.current) return;
 
-  useEffect(()=>{
-    fetchData(1).then(firstPage=>setItems(firstPage))
-  },[])
+      lockRef.current = true;
+      setLoading(true);
+
+      try {
+        const { newItems, nextHasMore } = await fetchPageData(pageNum);
+        if (!mountedRef.current) return;
+
+        setItems((prev) =>
+          mode === "replace" ? newItems : [...prev, ...newItems],
+        );
+        setHasMore(nextHasMore);
+        pageRef.current = pageNum;
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+        lockRef.current = false;
+      }
+    },
+    [fetchPageData],
+  );
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore) return;
+    await loadPage(pageRef.current + 1, "append");
+  }, [hasMore, loadPage]);
+
+  useEffect(() => {
+    loadPage(initialPage, "replace");
+  }, [initialPage, loadPage]);
 
   return { items, loadMore, hasMore, isLoading: loading };
 }
@@ -79,11 +130,11 @@ function getRandomContent() {
     .slice(0, len);
 }
 
-export function Waterfall() {
+export default function Waterfall() {
   const { items, loadMore, hasMore, isLoading: dataLoading } = useMockData();
-  const { isLoading: scrollLoading } = useScrollLoader(loadMore, hasMore);
+  useScrollLoader(loadMore, hasMore, dataLoading);
 
-  const isLoading = dataLoading || scrollLoading;
+  const isLoading = dataLoading;
 
   return (
     <div className="app">
@@ -100,7 +151,9 @@ export function Waterfall() {
         ))}
       </div>
       {isLoading && <div className="loading">加载中...</div>}
-      {!hasMore && <div className="no-more">—— 已经到底了 ——</div>}
+      {!hasMore && items.length > 0 && (
+        <div className="no-more">—— 已经到底了 ——</div>
+      )}
     </div>
   );
 }
