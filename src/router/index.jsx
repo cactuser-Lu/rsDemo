@@ -11,6 +11,7 @@ import EffectCompare from '../components/HookDemo/useEffectDemo'
 import Chat from '../components/ai/index'
 import Counter from '../components/HookDemo/useStateDemo.tsx'
 import Waterfall from '../pages/Waterfall/index-.jsx';
+import TodoList from '../pages/TodoList/index.jsx';
 
 
 const router = createBrowserRouter([
@@ -61,7 +62,11 @@ const router = createBrowserRouter([
       {
         path: 'Waterfall',
         element: <Waterfall />
-      }
+      },
+      {
+        path: 'TodoList',
+        element: <TodoList />
+      },
     ]
   }
 ]);

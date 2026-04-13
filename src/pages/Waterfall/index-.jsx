@@ -88,28 +88,28 @@ function useMockData(initialPage = 1, pageSize = 10) {
       if (lockRef.current) return;
 
       lockRef.current = true;
-      setLoading(true)
-      const {newItems,nextHasMore}=await fetchPageData(pageNum)
+      setLoading(true);
+      const { newItems, nextHasMore } = await fetchPageData(pageNum);
       setItems((prev) =>
-          mode === "replace" ? newItems : [...prev, ...newItems],
-        );
-      setHasMore(nextHasMore)
-      setLoading(false)
-      pageRef.current=pageNum
+        mode === "replace" ? newItems : [...prev, ...newItems],
+      );
+      setHasMore(nextHasMore);
+      setLoading(false);
+      pageRef.current = pageNum;
       lockRef.current = false;
     },
     [fetchPageData],
   );
 
   const loadMore = useCallback(async () => {
-    console.log('first')
-    loadPage(pageRef.current+1,'append')
-  }, [hasMore,loadPage]);
+    console.log("first");
+    loadPage(pageRef.current + 1, "append");
+  }, [hasMore, loadPage]);
 
   useEffect(() => {
-    console.log('222')
-    loadPage(initialPage,'replace')
-  }, [initialPage,loadPage]);
+    console.log("222");
+    loadPage(initialPage, "replace");
+  }, [initialPage, loadPage]);
 
   return { items, loadMore, hasMore, isLoading: loading };
 }
@@ -123,17 +123,37 @@ function getRandomContent() {
     .slice(0, len);
 }
 
+const usePrevious=(value)=>{
+    const [prev,setPrev]=useState(undefined)
+    const prevRef=useRef()
+
+    useEffect(()=>{
+      console.log(prevRef,'11')
+        setPrev(prevRef.current)
+        prevRef.current=value
+    },[value])
+
+    return prev
+}
+
 export default function Waterfall() {
   const { items, loadMore, hasMore, isLoading: dataLoading } = useMockData();
   useScrollLoader(loadMore, hasMore, dataLoading);
 
   const isLoading = dataLoading;
 
+  const [count, setCount] = useState(0);
+  const prevCount = usePrevious(count);
+
   return (
     <div className="app">
       <header className="header">
         <h1>瀑布流 · 双列卡片</h1>
         <p>滚动到底部自动加载更多（模拟分页）</p>
+         <div>
+      <p>Now: {count}, Before: {prevCount}</p>
+      <button onClick={() => setCount(c => c + 1)}>+1</button>
+    </div>
       </header>
       <div className="waterfall">
         {items.map((item) => (
