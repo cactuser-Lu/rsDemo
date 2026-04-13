@@ -10,7 +10,7 @@ import UploadFile from '../components/UploadFile';
 import EffectCompare from '../components/HookDemo/useEffectDemo'
 import Chat from '../components/ai/index'
 import Counter from '../components/HookDemo/useStateDemo.tsx'
-import Waterfall from '../pages/Waterfall/index.jsx';
+import Waterfall from '../pages/Waterfall/index-.jsx';
 
 
 const router = createBrowserRouter([

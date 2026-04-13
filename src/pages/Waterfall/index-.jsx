@@ -74,7 +74,7 @@ function useMockData(initialPage = 1, pageSize = 10) {
         content: getRandomContent(), // 随机内容长度，产生不定高
       }));
 
-      const totalPages = 5;
+      const totalPages = 2;
       return {
         newItems,
         nextHasMore: pageNum < totalPages,
@@ -88,36 +88,28 @@ function useMockData(initialPage = 1, pageSize = 10) {
       if (lockRef.current) return;
 
       lockRef.current = true;
-      setLoading(true);
-
-      try {
-        const { newItems, nextHasMore } = await fetchPageData(pageNum);
-        if (!mountedRef.current) return;
-
-        setItems((prev) =>
+      setLoading(true)
+      const {newItems,nextHasMore}=await fetchPageData(pageNum)
+      setItems((prev) =>
           mode === "replace" ? newItems : [...prev, ...newItems],
         );
-        setHasMore(nextHasMore);
-        pageRef.current = pageNum;
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
-        lockRef.current = false;
-      }
+      setHasMore(nextHasMore)
+      setLoading(false)
+      pageRef.current=pageNum
+      lockRef.current = false;
     },
     [fetchPageData],
   );
 
   const loadMore = useCallback(async () => {
-    if (!hasMore) return;
-    await loadPage(pageRef.current + 1, "append");
-  }, [hasMore, loadPage]);
+    console.log('first')
+    loadPage(pageRef.current+1,'append')
+  }, [hasMore,loadPage]);
 
   useEffect(() => {
-    console.log('3333')
-    loadPage(initialPage, "replace");
-  }, [initialPage, loadPage]);
+    console.log('222')
+    loadPage(initialPage,'replace')
+  }, [initialPage,loadPage]);
 
   return { items, loadMore, hasMore, isLoading: loading };
 }
