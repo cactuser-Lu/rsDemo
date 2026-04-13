@@ -1,0 +1,132 @@
+:root {
+  --bg: #eef2ff;
+  --card-bg: #ffffff;
+  --text-main: #1f2937;
+  --text-sub: #5b6472;
+  --line: #d8deee;
+  --brand-start: #2457f5;
+  --brand-end: #2fa4ff;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: radial-gradient(circle at top left, #f8fbff 0%, var(--bg) 60%, #e8eefc 100%);
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: var(--text-main);
+}
+
+.virtual-app {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 18px;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.header h1 {
+  font-size: 1.7rem;
+  color: #1e2a44;
+}
+
+.header p {
+  margin-top: 8px;
+  color: var(--text-sub);
+}
+
+.panel {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(31, 41, 55, 0.08);
+  padding: 12px;
+}
+
+.panel-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.panel-meta span {
+  font-size: 12px;
+  color: #3b4a67;
+  background: #f2f6ff;
+  border: 1px solid #dbe5ff;
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.virtual-scroll-container {
+  height: 68vh;
+  min-height: 420px;
+  overflow: auto;
+  border-radius: 12px;
+  border: 1px solid #dee5f7;
+  background: linear-gradient(180deg, #f8faff 0%, #f2f7ff 100%);
+}
+
+.virtual-inner {
+  position: relative;
+  width: 100%;
+  padding: 10px;
+}
+
+.card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: var(--card-bg);
+  border-radius: 14px;
+  border: 1px solid #e2e8f5;
+  box-shadow: 0 5px 15px rgba(19, 44, 97, 0.1);
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
+  will-change: transform;
+}
+
+.card:hover {
+  box-shadow: 0 10px 18px rgba(19, 44, 97, 0.18);
+}
+
+.card-title {
+  background: linear-gradient(120deg, var(--brand-start), var(--brand-end));
+  color: #fff;
+  padding: 10px 14px;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.card-content {
+  padding: 14px;
+  color: #34425d;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.loading,
+.no-more {
+  text-align: center;
+  padding: 14px;
+  font-size: 14px;
+  color: #60708f;
+}
+
+@media (max-width: 700px) {
+  .virtual-scroll-container {
+    height: 62vh;
+    min-height: 360px;
+  }
+
+  .header h1 {
+    font-size: 1.4rem;
+  }
+}

@@ -111,7 +111,7 @@ function useMockData(initialPage = 1, pageSize = 10) {
 
   const loadMore = useCallback(async () => {
     if (!hasMore) return;
-    await loadPage(pageRef.current + 1, "append");
+    await loadPage(pageRef.current + 1, "replace");
   }, [hasMore, loadPage]);
 
   useEffect(() => {
