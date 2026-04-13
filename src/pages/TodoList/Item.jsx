@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 
-export default function Item({item}){
+export default function Item({item,ondel}){
 
     const [items,setItems]=useState([])
 
-    const handleDel= ()=>{
-
+    const handleDel= (id)=>{
+        ondel(id)
     }
 
     return (
@@ -13,7 +13,7 @@ export default function Item({item}){
             <span>{item.title}</span>
             <span>{item.content}</span>
             
-            <button onClick={handleDel}>-</button>
+            <button onClick={()=>handleDel(item.id)}>-</button>
         </div>
     )
 }
