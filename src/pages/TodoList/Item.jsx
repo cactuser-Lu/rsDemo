@@ -1,19 +1,32 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect,useLayoutEffect, useCallback, useRef, memo } from "react";
 
-export default function Item({item,ondel}){
+export function Item({ item, handleDelete, onToggle }) {
+  console.log("1. 组件渲染阶段：直接执行");
 
-    const [items,setItems]=useState([])
+  useEffect(() => {
+    console.log("3. DOM 渲染后：useEffect 执行");
+  });
 
-    const handleDel= (id)=>{
-        ondel(id)
-    }
+  useLayoutEffect(() => {
+    console.log("4. DOM 渲染后：useEffect 执行");
+  });
 
-    return (
-        <div>
-            <span>{item.title}</span>
-            <span>{item.content}</span>
-            
-            <button onClick={()=>handleDel(item.id)}>-</button>
-        </div>
-    )
+
+  console.log("2. 组件渲染阶段：继续执行");
+
+  const handleDel = (id) => {
+    handleDelete(id);
+  };
+
+  return (
+    <div onClick={() => onToggle(item.id)}>
+      <span>{item.title}</span>
+      <span>{item.content}</span>
+      {item.completed && <strong>已完成</strong>}
+
+      <button onClick={() => handleDel(item.id)}>-</button>
+    </div>
+  );
 }
+
+export default memo(Item);
