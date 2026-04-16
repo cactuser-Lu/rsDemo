@@ -28,8 +28,8 @@ function useScrollLoader(containerRef, onLoadMore, hasMore, isLoading, offset = 
   const syncViewportSize = useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
-    // setViewportHeight(...)
-    // setViewportWidth(...)
+    setViewportHeight(container.clientHeight)
+    setViewportWidth(container.clientWidth)
   }, [containerRef]);
 
   // TODO Step2: 实现滚动处理（rAF 节流 + 触底加载）
@@ -37,18 +37,46 @@ function useScrollLoader(containerRef, onLoadMore, hasMore, isLoading, offset = 
     const container = containerRef.current;
     if (!container || tickingRef.current) return;
 
-    // requestAnimationFrame(() => {
-    //   1) 读取 scrollTop/clientHeight/scrollHeight
-    //   2) setScrollTop / setViewportHeight
-    //   3) 判断距离底部 <= offset 时触发 onLoadMoreRef.current()
-    // });
+    requestAnimationFrame(() => {
+      // 1) 读取 scrollTop/clientHeight/scrollHeight
+      const current= container.current
+      tickingRef.current=false;
+      if(!current)return;
+
+      const top = current.scrollTop
+      const height = current.clientHeight
+      const scrollDistance = current.scrollHeight - (top+height)
+      // 2) setScrollTop / setViewportHeight
+      setScrollTop(top)
+      // setViewportHeight(height)
+      // 3) 判断距离底部 <= offset 时触发 onLoa/dMoreRef.current()
+      if(!hasMore.current || isLoading.current)return;
+      if(scrollDistance){
+        onLoadMore.current();
+      }
+    });
   }, [containerRef, offset]);
 
   // TODO Step3: 绑定 scroll 事件和 ResizeObserver，别忘了清理
   useEffect(() => {
-    // const container = containerRef.current;
-    // if (!container) return;
+    const container = containerRef.current;
+    if (!container) return;
     // ...addEventListener / observe / cleanup
+    const resizeObserver = new ResizeObserver(() => {
+      syncViewportSize();
+      handleScroll();
+    });
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    resizeObserver.observe(container);
+
+    syncViewportSize();
+    handleScroll();
+
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      resizeObserver.disconnect();
+    };
   }, [containerRef, handleScroll, syncViewportSize]);
 
   return { scrollTop, viewportHeight, viewportWidth };

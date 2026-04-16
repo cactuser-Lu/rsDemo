@@ -1,8 +1,8 @@
 import React, { useMemo, useRef } from "react";
 import "./waterfall.css";
-import useVirtualWaterfallData from "./myHooks/useVirtualWaterfallData";
-import useScrollLoader from "./myHooks/useScrollLoader";
-import useVirtualMasonryLayout from "./myHooks/useVirtualMasonryLayout";
+import useVirtualWaterfallData from "./hooks/useVirtualWaterfallData";
+import useScrollLoader from "./hooks/useScrollLoader";
+import useVirtualMasonryLayout from "./hooks/useVirtualMasonryLayout";
 
 export default function Waterfall() {
   const containerRef = useRef(null);
